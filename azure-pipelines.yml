@@ -1,0 +1,54 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+# Stage 1: Build
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: BuildJob
+    displayName: 'Compile Project'
+    steps:
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: '17'
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'pom.xml'
+        goals: 'clean compile'
+        options: '-Dmaven.test.skip=true'
+
+# Stage 2: Test
+- stage: Test
+  displayName: 'Test Stage'
+  dependsOn: Build
+  jobs:
+  - job: TestJob
+    displayName: 'Run Selenium Tests'
+    steps:
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'pom.xml'
+        goals: 'test'
+        options: '-Dmaven.test.failure.ignore=false'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/*.xml'
+
+    - script: |
+        echo "Zipping reports..."
+        zip -r $(Build.SourcesDirectory)/testng-reports.zip target/surefire-reports
+      displayName: 'Zip TestNG Reports'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.SourcesDirectory)/testng-reports.zip'
+        artifactName: 'Selenium-Reports'
+        publishLocation: 'Container'
